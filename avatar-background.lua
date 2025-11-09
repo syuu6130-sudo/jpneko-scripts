@@ -1,6 +1,6 @@
 -- Avatar Background Script with Rayfield UI
 -- Author: @jpneko03016
--- ゲームの背景を自分のアバターにして全員に反映
+-- 空と地面を自分のアバターにして全員に反映
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -25,14 +25,15 @@ local Window = Rayfield:CreateWindow({
 local Settings = {
     Enabled = false,
     Username = "jpneko03016",
-    BackgroundType = "Sky" -- Sky, ScreenGui, Both
+    SkySize = 5000,
+    GroundSize = 10000
 }
 
 -- サービス
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- メインタブ
 local MainTab = Window:CreateTab("メイン設定", 4483362458)
@@ -69,7 +70,7 @@ local EnableToggle = MainTab:CreateToggle({
             ApplyAvatarBackground()
             Rayfield:Notify({
                 Title = "有効化",
-                Content = "アバター背景を適用しました",
+                Content = "アバター背景を適用しました（全員に表示）",
                 Duration = 3,
                 Image = 4483362458
             })
@@ -85,20 +86,32 @@ local EnableToggle = MainTab:CreateToggle({
     end
 })
 
--- 背景タイプ選択
-local TypeDropdown = MainTab:CreateDropdown({
-    Name = "背景タイプ",
-    Options = {"スカイボックス", "画面オーバーレイ", "両方"},
-    CurrentOption = "両方",
-    Flag = "BackgroundType",
-    Callback = function(Option)
-        if Option == "スカイボックス" then
-            Settings.BackgroundType = "Sky"
-        elseif Option == "画面オーバーレイ" then
-            Settings.BackgroundType = "ScreenGui"
-        else
-            Settings.BackgroundType = "Both"
+-- 空のサイズスライダー
+local SkySizeSlider = MainTab:CreateSlider({
+    Name = "空の背景サイズ",
+    Range = {1000, 10000},
+    Increment = 500,
+    Suffix = "",
+    CurrentValue = Settings.SkySize,
+    Flag = "SkySize",
+    Callback = function(Value)
+        Settings.SkySize = Value
+        if Settings.Enabled then
+            ApplyAvatarBackground()
         end
+    end
+})
+
+-- 地面のサイズスライダー
+local GroundSizeSlider = MainTab:CreateSlider({
+    Name = "地面の背景サイズ",
+    Range = {5000, 20000},
+    Increment = 1000,
+    Suffix = "",
+    CurrentValue = Settings.GroundSize,
+    Flag = "GroundSize",
+    Callback = function(Value)
+        Settings.GroundSize = Value
         if Settings.Enabled then
             ApplyAvatarBackground()
         end
@@ -112,7 +125,7 @@ MainTab:CreateButton({
         ApplyAvatarBackground()
         Rayfield:Notify({
             Title = "適用完了",
-            Content = "背景を適用しました",
+            Content = "背景を適用しました（全員に表示）",
             Duration = 3,
             Image = 4483362458
         })
@@ -137,7 +150,7 @@ local InfoTab = Window:CreateTab("情報", 4483362458)
 
 InfoTab:CreateParagraph({
     Title = "使い方",
-    Content = "このスクリプトはゲームの背景をあなたのアバターに変更します。全てのプレイヤーに表示されます。\n\n1. ユーザー名を入力\n2. 背景タイプを選択\n3. 「背景を有効化」をオン"
+    Content = "このスクリプトは空と地面の背景をあなたのアバターに変更します。サーバー内の全プレイヤーに表示されます。\n\n1. ユーザー名を入力\n2. サイズを調整\n3. 「背景を有効化」をオン"
 })
 
 -- アバター画像URLを取得
@@ -180,31 +193,53 @@ function ApplySkyBackground(imageUrl)
     sky.Parent = Lighting
 end
 
--- 画面オーバーレイ背景を適用
-function ApplyScreenBackground(imageUrl)
-    -- 既存のScreenGuiを削除
-    local existingGui = PlayerGui:FindFirstChild("AvatarBackgroundGui")
-    if existingGui then
-        existingGui:Destroy()
+-- ワークスペースに背景パーツを配置（全員に見える）
+function ApplyWorkspaceBackground(imageUrl)
+    -- 既存の背景パーツを削除
+    local existingFolder = Workspace:FindFirstChild("AvatarBackgroundParts")
+    if existingFolder then
+        existingFolder:Destroy()
     end
     
-    -- 新しいScreenGuiを作成
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "AvatarBackgroundGui"
-    screenGui.ResetOnSpawn = false
-    screenGui.DisplayOrder = -100
-    screenGui.Parent = PlayerGui
+    -- フォルダーを作成
+    local folder = Instance.new("Folder")
+    folder.Name = "AvatarBackgroundParts"
+    folder.Parent = Workspace
     
-    -- 背景画像
-    local imageLabel = Instance.new("ImageLabel")
-    imageLabel.Name = "BackgroundImage"
-    imageLabel.Size = UDim2.new(1, 0, 1, 0)
-    imageLabel.Position = UDim2.new(0, 0, 0, 0)
-    imageLabel.BackgroundTransparency = 1
-    imageLabel.Image = imageUrl
-    imageLabel.ImageTransparency = 0.3
-    imageLabel.ScaleType = Enum.ScaleType.Crop
-    imageLabel.Parent = screenGui
+    -- 6方向に巨大なパーツを配置（プレイヤーを囲む）
+    local directions = {
+        {name = "North", pos = Vector3.new(0, 0, -Settings.SkySize/2), size = Vector3.new(Settings.SkySize, Settings.SkySize, 1)},
+        {name = "South", pos = Vector3.new(0, 0, Settings.SkySize/2), size = Vector3.new(Settings.SkySize, Settings.SkySize, 1)},
+        {name = "East", pos = Vector3.new(Settings.SkySize/2, 0, 0), size = Vector3.new(1, Settings.SkySize, Settings.SkySize)},
+        {name = "West", pos = Vector3.new(-Settings.SkySize/2, 0, 0), size = Vector3.new(1, Settings.SkySize, Settings.SkySize)},
+        {name = "Top", pos = Vector3.new(0, Settings.SkySize/2, 0), size = Vector3.new(Settings.SkySize, 1, Settings.SkySize)},
+        {name = "Bottom", pos = Vector3.new(0, -Settings.SkySize/2, 0), size = Vector3.new(Settings.GroundSize, 1, Settings.GroundSize)}
+    }
+    
+    for _, dir in pairs(directions) do
+        local part = Instance.new("Part")
+        part.Name = "AvatarBG_" .. dir.name
+        part.Size = dir.size
+        part.Position = dir.pos
+        part.Anchored = true
+        part.CanCollide = false
+        part.Transparency = 1
+        part.Material = Enum.Material.SmoothPlastic
+        
+        local surfaceGui = Instance.new("SurfaceGui")
+        surfaceGui.Face = Enum.NormalId.Front
+        surfaceGui.AlwaysOnTop = false
+        surfaceGui.Parent = part
+        
+        local imageLabel = Instance.new("ImageLabel")
+        imageLabel.Size = UDim2.new(1, 0, 1, 0)
+        imageLabel.BackgroundTransparency = 1
+        imageLabel.Image = imageUrl
+        imageLabel.ScaleType = Enum.ScaleType.Fit
+        imageLabel.Parent = surfaceGui
+        
+        part.Parent = folder
+    end
 end
 
 -- アバター背景を適用
@@ -214,16 +249,11 @@ function ApplyAvatarBackground()
     local imageUrl, userId = GetAvatarImageUrl(Settings.Username)
     if not imageUrl then return end
     
-    -- 高解像度の画像URLを使用
-    local fullImageUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=420&height=420&format=png"
+    -- スカイボックスを適用
+    ApplySkyBackground(imageUrl)
     
-    if Settings.BackgroundType == "Sky" or Settings.BackgroundType == "Both" then
-        ApplySkyBackground(imageUrl)
-    end
-    
-    if Settings.BackgroundType == "ScreenGui" or Settings.BackgroundType == "Both" then
-        ApplyScreenBackground(imageUrl)
-    end
+    -- ワークスペースに背景パーツを配置
+    ApplyWorkspaceBackground(imageUrl)
 end
 
 -- 背景を削除
@@ -235,10 +265,10 @@ function RemoveAvatarBackground()
         end
     end
     
-    -- ScreenGuiを削除
-    local existingGui = PlayerGui:FindFirstChild("AvatarBackgroundGui")
-    if existingGui then
-        existingGui:Destroy()
+    -- ワークスペースの背景パーツを削除
+    local existingFolder = Workspace:FindFirstChild("AvatarBackgroundParts")
+    if existingFolder then
+        existingFolder:Destroy()
     end
 end
 
@@ -251,4 +281,4 @@ Rayfield:Notify({
 })
 
 print("Avatar Background Script loaded successfully!")
-print("ゲームの背景があなたのアバターに変更されます（全員に表示）")
+print("空と地面の背景があなたのアバターに変更されます（サーバー内全員に表示）")

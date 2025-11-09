@@ -1,6 +1,6 @@
 -- Avatar Background Script with Rayfield UI
 -- Author: @jpneko03016
--- アバターを背景として表示し、敵にも反映
+-- ゲームの背景を自分のアバターにして全員に反映
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -25,14 +25,14 @@ local Window = Rayfield:CreateWindow({
 local Settings = {
     Enabled = false,
     Username = "jpneko03016",
-    ApplyToEnemies = true,
-    BackgroundTransparency = 0.5,
-    BackgroundSize = UDim2.new(2, 0, 2, 0)
+    BackgroundType = "Sky" -- Sky, ScreenGui, Both
 }
 
--- プレイヤーとサービス
+-- サービス
 local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- メインタブ
 local MainTab = Window:CreateTab("メイン設定", 4483362458)
@@ -50,6 +50,9 @@ local UsernameInput = MainTab:CreateInput({
             Duration = 3,
             Image = 4483362458
         })
+        if Settings.Enabled then
+            ApplyAvatarBackground()
+        end
     end
 })
 
@@ -63,7 +66,7 @@ local EnableToggle = MainTab:CreateToggle({
     Callback = function(Value)
         Settings.Enabled = Value
         if Value then
-            ApplyBackgroundToAll()
+            ApplyAvatarBackground()
             Rayfield:Notify({
                 Title = "有効化",
                 Content = "アバター背景を適用しました",
@@ -71,7 +74,7 @@ local EnableToggle = MainTab:CreateToggle({
                 Image = 4483362458
             })
         else
-            RemoveAllBackgrounds()
+            RemoveAvatarBackground()
             Rayfield:Notify({
                 Title = "無効化",
                 Content = "アバター背景を削除しました",
@@ -82,41 +85,23 @@ local EnableToggle = MainTab:CreateToggle({
     end
 })
 
--- 敵に適用するトグル
-local EnemyToggle = MainTab:CreateToggle({
-    Name = "敵にも適用",
-    CurrentValue = Settings.ApplyToEnemies,
-    Flag = "ApplyToEnemies",
-    Callback = function(Value)
-        Settings.ApplyToEnemies = Value
-    end
-})
-
--- 透明度スライダー
-local TransparencySlider = MainTab:CreateSlider({
-    Name = "背景透明度",
-    Range = {0, 1},
-    Increment = 0.1,
-    Suffix = "",
-    CurrentValue = Settings.BackgroundTransparency,
-    Flag = "BackgroundTransparency",
-    Callback = function(Value)
-        Settings.BackgroundTransparency = Value
-        UpdateAllBackgroundTransparency()
-    end
-})
-
--- サイズスライダー
-local SizeSlider = MainTab:CreateSlider({
-    Name = "背景サイズ倍率",
-    Range = {1, 5},
-    Increment = 0.5,
-    Suffix = "x",
-    CurrentValue = 2,
-    Flag = "BackgroundSize",
-    Callback = function(Value)
-        Settings.BackgroundSize = UDim2.new(Value, 0, Value, 0)
-        UpdateAllBackgroundSizes()
+-- 背景タイプ選択
+local TypeDropdown = MainTab:CreateDropdown({
+    Name = "背景タイプ",
+    Options = {"スカイボックス", "画面オーバーレイ", "両方"},
+    CurrentOption = "両方",
+    Flag = "BackgroundType",
+    Callback = function(Option)
+        if Option == "スカイボックス" then
+            Settings.BackgroundType = "Sky"
+        elseif Option == "画面オーバーレイ" then
+            Settings.BackgroundType = "ScreenGui"
+        else
+            Settings.BackgroundType = "Both"
+        end
+        if Settings.Enabled then
+            ApplyAvatarBackground()
+        end
     end
 })
 
@@ -124,10 +109,10 @@ local SizeSlider = MainTab:CreateSlider({
 MainTab:CreateButton({
     Name = "今すぐ適用",
     Callback = function()
-        ApplyBackgroundToAll()
+        ApplyAvatarBackground()
         Rayfield:Notify({
             Title = "適用完了",
-            Content = "全プレイヤーに背景を適用しました",
+            Content = "背景を適用しました",
             Duration = 3,
             Image = 4483362458
         })
@@ -137,121 +122,127 @@ MainTab:CreateButton({
 MainTab:CreateButton({
     Name = "背景をリセット",
     Callback = function()
-        RemoveAllBackgrounds()
+        RemoveAvatarBackground()
         Rayfield:Notify({
             Title = "リセット完了",
-            Content = "全ての背景を削除しました",
+            Content = "背景を削除しました",
             Duration = 3,
             Image = 4483362458
         })
     end
 })
 
--- 背景適用関数
-function ApplyBackground(player)
-    if not Settings.Enabled then return end
-    if not Settings.ApplyToEnemies and player ~= LocalPlayer then return end
-    
-    local character = player.Character
-    if not character then return end
-    
-    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return end
-    
-    local existingBG = humanoidRootPart:FindFirstChild("AvatarBackground")
-    if existingBG then
-        existingBG:Destroy()
-    end
-    
-    local billboardGui = Instance.new("BillboardGui")
-    billboardGui.Name = "AvatarBackground"
-    billboardGui.Size = Settings.BackgroundSize
-    billboardGui.StudsOffset = Vector3.new(0, 0, 0)
-    billboardGui.AlwaysOnTop = false
-    billboardGui.Parent = humanoidRootPart
-    
-    local imageLabel = Instance.new("ImageLabel")
-    imageLabel.Size = UDim2.new(1, 0, 1, 0)
-    imageLabel.BackgroundTransparency = 1
-    imageLabel.ImageTransparency = Settings.BackgroundTransparency
-    imageLabel.Image = "rbxthumb://type=AvatarHeadShot&id=" .. Players:GetUserIdFromNameAsync(Settings.Username) .. "&w=420&h=420"
-    imageLabel.ScaleType = Enum.ScaleType.Fit
-    imageLabel.Parent = billboardGui
-end
+-- 情報タブ
+local InfoTab = Window:CreateTab("情報", 4483362458)
 
-function ApplyBackgroundToAll()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Character then
-            ApplyBackground(player)
-        end
-    end
-end
+InfoTab:CreateParagraph({
+    Title = "使い方",
+    Content = "このスクリプトはゲームの背景をあなたのアバターに変更します。全てのプレイヤーに表示されます。\n\n1. ユーザー名を入力\n2. 背景タイプを選択\n3. 「背景を有効化」をオン"
+})
 
-function RemoveAllBackgrounds()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Character then
-            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-            if humanoidRootPart then
-                local bg = humanoidRootPart:FindFirstChild("AvatarBackground")
-                if bg then
-                    bg:Destroy()
-                end
-            end
-        end
-    end
-end
-
-function UpdateAllBackgroundTransparency()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Character then
-            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-            if humanoidRootPart then
-                local bg = humanoidRootPart:FindFirstChild("AvatarBackground")
-                if bg then
-                    local imageLabel = bg:FindFirstChildOfClass("ImageLabel")
-                    if imageLabel then
-                        imageLabel.ImageTransparency = Settings.BackgroundTransparency
-                    end
-                end
-            end
-        end
-    end
-end
-
-function UpdateAllBackgroundSizes()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Character then
-            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-            if humanoidRootPart then
-                local bg = humanoidRootPart:FindFirstChild("AvatarBackground")
-                if bg then
-                    bg.Size = Settings.BackgroundSize
-                end
-            end
-        end
-    end
-end
-
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(character)
-        wait(0.5)
-        if Settings.Enabled then
-            ApplyBackground(player)
-        end
+-- アバター画像URLを取得
+function GetAvatarImageUrl(username)
+    local success, userId = pcall(function()
+        return Players:GetUserIdFromNameAsync(username)
     end)
-end)
-
-for _, player in pairs(Players:GetPlayers()) do
-    if player.Character then
-        player.CharacterAdded:Connect(function(character)
-            wait(0.5)
-            if Settings.Enabled then
-                ApplyBackground(player)
-            end
-        end)
+    
+    if success and userId then
+        return "rbxthumb://type=AvatarHeadShot&id=" .. userId .. "&w=420&h=420", userId
+    else
+        Rayfield:Notify({
+            Title = "エラー",
+            Content = "ユーザー名が見つかりません",
+            Duration = 5,
+            Image = 4483362458
+        })
+        return nil, nil
     end
 end
 
+-- スカイボックス背景を適用
+function ApplySkyBackground(imageUrl)
+    -- 既存のSkyを削除
+    for _, obj in pairs(Lighting:GetChildren()) do
+        if obj:IsA("Sky") and obj.Name == "AvatarSky" then
+            obj:Destroy()
+        end
+    end
+    
+    -- 新しいSkyを作成
+    local sky = Instance.new("Sky")
+    sky.Name = "AvatarSky"
+    sky.SkyboxBk = imageUrl
+    sky.SkyboxDn = imageUrl
+    sky.SkyboxFt = imageUrl
+    sky.SkyboxLf = imageUrl
+    sky.SkyboxRt = imageUrl
+    sky.SkyboxUp = imageUrl
+    sky.Parent = Lighting
+end
+
+-- 画面オーバーレイ背景を適用
+function ApplyScreenBackground(imageUrl)
+    -- 既存のScreenGuiを削除
+    local existingGui = PlayerGui:FindFirstChild("AvatarBackgroundGui")
+    if existingGui then
+        existingGui:Destroy()
+    end
+    
+    -- 新しいScreenGuiを作成
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "AvatarBackgroundGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.DisplayOrder = -100
+    screenGui.Parent = PlayerGui
+    
+    -- 背景画像
+    local imageLabel = Instance.new("ImageLabel")
+    imageLabel.Name = "BackgroundImage"
+    imageLabel.Size = UDim2.new(1, 0, 1, 0)
+    imageLabel.Position = UDim2.new(0, 0, 0, 0)
+    imageLabel.BackgroundTransparency = 1
+    imageLabel.Image = imageUrl
+    imageLabel.ImageTransparency = 0.3
+    imageLabel.ScaleType = Enum.ScaleType.Crop
+    imageLabel.Parent = screenGui
+end
+
+-- アバター背景を適用
+function ApplyAvatarBackground()
+    if not Settings.Enabled then return end
+    
+    local imageUrl, userId = GetAvatarImageUrl(Settings.Username)
+    if not imageUrl then return end
+    
+    -- 高解像度の画像URLを使用
+    local fullImageUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=420&height=420&format=png"
+    
+    if Settings.BackgroundType == "Sky" or Settings.BackgroundType == "Both" then
+        ApplySkyBackground(imageUrl)
+    end
+    
+    if Settings.BackgroundType == "ScreenGui" or Settings.BackgroundType == "Both" then
+        ApplyScreenBackground(imageUrl)
+    end
+end
+
+-- 背景を削除
+function RemoveAvatarBackground()
+    -- Skyを削除
+    for _, obj in pairs(Lighting:GetChildren()) do
+        if obj:IsA("Sky") and obj.Name == "AvatarSky" then
+            obj:Destroy()
+        end
+    end
+    
+    -- ScreenGuiを削除
+    local existingGui = PlayerGui:FindFirstChild("AvatarBackgroundGui")
+    if existingGui then
+        existingGui:Destroy()
+    end
+end
+
+-- 初期化メッセージ
 Rayfield:Notify({
     Title = "スクリプト読み込み完了",
     Content = "Avatar Background Script by @jpneko03016",
@@ -260,3 +251,4 @@ Rayfield:Notify({
 })
 
 print("Avatar Background Script loaded successfully!")
+print("ゲームの背景があなたのアバターに変更されます（全員に表示）")
